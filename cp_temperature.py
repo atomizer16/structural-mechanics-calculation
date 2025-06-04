@@ -67,6 +67,46 @@ def assemble_global_stiffness(nodes, elements):
                 K[dof_map[i], dof_map[j]] += k_global[i, j]
     return K
 
+def beam_uniform_load_local(q, L):
+    f_local = np.zeros(6)
+    f_local[1] = q * L / 2
+    f_local[2] = q * L ** 2 / 12
+    f_local[4] = q * L / 2
+    f_local[5] = -q * L ** 2 / 12
+    return f_local
+
+def beam_point_load_local(P, a, L):
+    f_local = np.zeros(6)
+    b = L - a
+    f_local[1] = P * b ** 2 * (L + 2 * a) / L ** 3
+    f_local[2] = -P * a * b ** 2 / L ** 2
+    f_local[4] = P * a ** 2 * (3 * L - 2 * a) / L ** 3
+    f_local[5] = P * a ** 2 * b / L ** 2
+    return f_local
+
+def assemble_element_loads(F, nodes, elements, element_loads):
+    for idx, elem in enumerate(elements):
+        n1, n2 = elem.start, elem.end
+        node1, node2 = nodes[n1], nodes[n2]
+        L = np.hypot(node2.x - node1.x, node2.y - node1.y)
+        T = transformation_matrix(node1.x, node1.y, node2.x, node2.y)
+        dof_map = [n1*3, n1*3+1, n1*3+2, n2*3, n2*3+1, n2*3+2]
+        # Uniform distributed load
+        if "uniform" in element_loads[idx] and element_loads[idx]["uniform"]:
+            q = element_loads[idx]["uniform"]
+            f_local_uni = beam_uniform_load_local(q, L)
+            f_global_uni = T.T @ f_local_uni
+            for i in range(6):
+                F[dof_map[i]] += f_global_uni[i]
+        # Point loads
+        if "points" in element_loads[idx]:
+            for P, a in element_loads[idx]["points"]:
+                f_local_p = beam_point_load_local(P, a, L)
+                f_global_p = T.T @ f_local_p
+                for i in range(6):
+                    F[dof_map[i]] += f_global_p[i]
+    return F
+
 def thermal_equivalent_nodal_force(E, A, I, L, alpha, delta_T, grad_T, h):
     F_local = np.zeros(6)
     if delta_T != 0.0 and alpha != 0.0:
@@ -124,15 +164,25 @@ def main():
     ]
 
     elements = [
-        Element(0, 0, 1, E, A, I, delta_T=20.0, alpha=alpha, grad_T=10.0, h=h),  # temperature and gradient
+        Element(0, 0, 1, E, A, I, delta_T=0.0, alpha=alpha, grad_T=50.0, h=h),
         Element(1, 1, 2, E, A, I, delta_T=0.0, alpha=alpha, grad_T=0.0, h=h),
     ]
 
-    ndof = len(nodes) * 3 # ndof is the number of degrees of freedom (3 per node)
+    ndof = len(nodes) * 3
     F = np.zeros(ndof)
     F[2*3+1] = -20e3  # Node 2: vertical force -20kN
 
+    # Element-wise loads: uniform = distributed load (N/m), points = list of (P[N], a[m] from node 1)
+    element_loads = [
+        {"uniform": 18e3, "points": [(10e3, 1.2)]},                # Element 0: distributed + one point load
+        {"uniform": 16e3, "points": [(15e3, 0.8), (12e3, 2.1)]}    # Element 1: distributed + two point loads
+    ]
+
+    # Assemble temperature effects
     F += assemble_global_temperature_force(nodes, elements)
+
+    # Assemble element distributed and point loads
+    F = assemble_element_loads(F, nodes, elements, element_loads)
 
     K = assemble_global_stiffness(nodes, elements)
     K_mod, F_mod = apply_boundary_conditions(K, F, nodes)

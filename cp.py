@@ -21,6 +21,46 @@ class Element:
     rigid: Tuple[float, float] = (0.0, 0.0)
     ignore_axial: bool = False
 
+def beam_uniform_load_local(q, L):
+    f_local = np.zeros(6)
+    f_local[1] = q * L / 2
+    f_local[2] = q * L ** 2 / 12
+    f_local[4] = q * L / 2
+    f_local[5] = -q * L ** 2 / 12
+    return f_local
+
+def beam_point_load_local(P, a, L):
+    f_local = np.zeros(6)
+    b = L - a
+    f_local[1] = P * b ** 2 * (L + 2 * a) / L ** 3
+    f_local[2] = -P * a * b ** 2 / L ** 2
+    f_local[4] = P * a ** 2 * (3 * L - 2 * a) / L ** 3
+    f_local[5] = P * a ** 2 * b / L ** 2
+    return f_local
+
+def assemble_element_loads(F, nodes, elements, element_loads):
+    for idx, elem in enumerate(elements):
+        n1, n2 = elem.start, elem.end
+        node1, node2 = nodes[n1], nodes[n2]
+        L = np.hypot(node2.x - node1.x, node2.y - node1.y)
+        T = transformation_matrix(node1.x, node1.y, node2.x, node2.y)
+        dof_map = [n1*3, n1*3+1, n1*3+2, n2*3, n2*3+1, n2*3+2]
+        # --- uniform load ---
+        if "uniform" in element_loads[idx] and element_loads[idx]["uniform"]:
+            q = element_loads[idx]["uniform"]
+            f_local_uni = beam_uniform_load_local(q, L)
+            f_global_uni = T.T @ f_local_uni
+            for i in range(6):
+                F[dof_map[i]] += f_global_uni[i]
+        # --- point loads ---
+        if "points" in element_loads[idx]:
+            for P, a in element_loads[idx]["points"]:
+                f_local_p = beam_point_load_local(P, a, L)
+                f_global_p = T.T @ f_local_p
+                for i in range(6):
+                    F[dof_map[i]] += f_global_p[i]
+    return F
+
 def element_stiffness_2d_frame(E, A, I, L, ignore_axial=False, start_hinge=False, end_hinge=False):
     k = np.zeros((6, 6))
     if not ignore_axial:
@@ -97,25 +137,34 @@ def apply_boundary_conditions(K, F, nodes):
 
 def main():
     nodes = [
-        Node(0, 0.0, 0.0, constraint=[0, 0, 0]),  #fixed
-        Node(1, 4.0, 0.0, constraint=[None, 0, None]),   #constrained y (x,y,M)
-        Node(2, 4.0, 3.0, constraint=[None, None, None]),   #free
+        Node(0, 0.0, 0.0, constraint=[0, 0, 0]),
+        Node(1, 4.0, 0.0, constraint=[None, 0, None]),
+        Node(2, 4.0, 3.0, constraint=[None, None, None]),
     ]
     elements = [
-        Element(0, 0, 1, E=2e11, A=0.003, I=1.6e-5),   # Element 0 from node 0 to node 1
-        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5)
+        Element(0, 0, 1, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False),
+        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False)
     ]
-    ndof = len(nodes) * 3  # def degrees of freedom (3 per node)
-    F = np.zeros(ndof)  # def global force vector
-    F[2*3+1] = -20e3  # Apply -20kN vertical force at node 2
+    ndof = len(nodes) * 3
+    F = np.zeros(ndof)
+    # Nodal force example (can be multiple if needed)
+    F[2*3+1] = -20e3  # Node 2, vertical force
+
+    # === Smart element load table ===
+    element_loads = [
+        {"uniform": 10e3, "points": [(10e3, 1)]},                # Element 0: uniform + one point load
+        {"uniform": 20e3, "points": [(10e3, 1), (10e3, 1)]}    # Element 1: uniform + two point loads
+    ]
+    # --- Apply element loads ---
+    F = assemble_element_loads(F, nodes, elements, element_loads)
 
     K = assemble_global_stiffness(nodes, elements)
-    print(K)
+    print("Global stiffness matrix:\n", K)
     K_mod, F_mod = apply_boundary_conditions(K, F, nodes)
-    print(K_mod)
-    print(F_mod)
+    print("Modified stiffness matrix:\n", K_mod)
+    print("Modified load vector:\n", F_mod)
     U = np.linalg.solve(K_mod, F_mod)
-    print(U)
+    print("Displacement result:\n", U)
 
 if __name__ == '__main__':
     main()
