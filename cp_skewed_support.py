@@ -178,13 +178,44 @@ def main():
     # Assemble all element loads into the global load vector
     F = assemble_element_loads(F, nodes, elements, element_loads)
 
+    # Assemble global stiffness matrix
     K = assemble_global_stiffness(nodes, elements)
+    print("\nGlobal stiffness matrix K:\n", K)
+
+    # Apply boundary conditions (including skewed support)
     K_mod, F_mod = apply_boundary_conditions(K, F, nodes)
+    print("\nModified global stiffness matrix K_mod:\n", K_mod)
+    print("\nModified load vector F_mod:\n", F_mod)
+
+    # Solve for displacements
     U = np.linalg.solve(K_mod, F_mod)
 
-    print("Nodal displacements (ux, uy, M):")
+    print("\nNodal displacements (ux, uy, M):")
     for i in range(len(nodes)):
         print(f"Node {i}: ux={U[i*3]:.6e} m, uy={U[i*3+1]:.6e} m, M={U[i*3+2]:.6e} rad")
+
+    # ---- Calculate and print element local end forces ----
+    print("\nElement local end forces (N, N, Nm, N, N, Nm):")
+    for idx, elem in enumerate(elements):
+        n1, n2 = elem.start, elem.end
+        node1, node2 = nodes[n1], nodes[n2]
+        L = np.hypot(node2.x - node1.x, node2.y - node1.y)
+        dof_map = [n1*3, n1*3+1, n1*3+2, n2*3, n2*3+1, n2*3+2]
+        Ue_global = np.array([U[d] for d in dof_map])
+        T = transformation_matrix(node1.x, node1.y, node2.x, node2.y)
+        Ue_local = T @ Ue_global
+        k_local = element_stiffness_2d_frame(elem.E, elem.A, elem.I, L)
+        # Subtract the equivalent nodal force (local) for this element
+        f_eqv = np.zeros(6)
+        if len(element_loads) > idx:
+            if "uniform" in element_loads[idx] and element_loads[idx].get("uniform", 0):
+                f_eqv += beam_uniform_load_local(element_loads[idx]["uniform"], L)
+            if "points" in element_loads[idx]:
+                for P, a in element_loads[idx]["points"]:
+                    f_eqv += beam_point_load_local(P, a, L)
+        Fe_local = k_local @ Ue_local - f_eqv
+        print(f"Element {elem.id}: {Fe_local}")
+
 
 if __name__ == '__main__':
     main()

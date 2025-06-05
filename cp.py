@@ -138,23 +138,26 @@ def apply_boundary_conditions(K, F, nodes):
 def main():
     nodes = [
         Node(0, 0.0, 0.0, constraint=[0, 0, 0]),
-        Node(1, 4.0, 0.0, constraint=[None, 0, None]),
-        Node(2, 4.0, 3.0, constraint=[None, None, None]),
+        Node(1, 0.0, 4.0, constraint=[None, None, None]),
+        Node(2, 6.0, 4.0, constraint=[None, None, None]),
+        Node(3, 6.0, 0.0, constraint=[0, 0, None]),
     ]
     elements = [
         Element(0, 0, 1, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False),
-        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False)
+        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False),
+        Element(2, 2, 3, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False)
     ]
     ndof = len(nodes) * 3
     F = np.zeros(ndof)
     # Nodal force example (can be multiple if needed)
-    F[2*3+1] = -20e3  # Node 2, vertical force
+    # F[2*3+1] = -20e3  # Node 2, vertical force
 
     # === Smart element load table ===
     element_loads = [
-        {"uniform": 10e3, "points": [(10e3, 1)]},                # Element 0: uniform + one point load
-        {"uniform": 20e3, "points": [(10e3, 1), (10e3, 1)]}    # Element 1: uniform + two point loads
-    ]
+    {"uniform": 2e3},  # Element 0: has uniform load
+    {},                # Element 1: no loads
+    {}                 # Element 2: no loads
+]
     # --- Apply element loads ---
     F = assemble_element_loads(F, nodes, elements, element_loads)
 
@@ -165,6 +168,33 @@ def main():
     print("Modified load vector:\n", F_mod)
     U = np.linalg.solve(K_mod, F_mod)
     print("Displacement result:\n", U)
+    print("\nElement local end forces (N, N, Nm, N, N, Nm):")
+    for elem in elements:
+        n1, n2 = elem.start, elem.end
+        node1, node2 = nodes[n1], nodes[n2]
+        L = np.hypot(node2.x - node1.x, node2.y - node1.y)
+        dof_map = [n1*3, n1*3+1, n1*3+2, n2*3, n2*3+1, n2*3+2]
+        Ue_global = np.array([U[d] for d in dof_map])
+        T = transformation_matrix(node1.x, node1.y, node2.x, node2.y)
+        Ue_local = T @ Ue_global
+        k_local = element_stiffness_2d_frame(elem.E, elem.A, elem.I, L,
+                                             ignore_axial=elem.ignore_axial,
+                                             start_hinge=elem.hinge[0], end_hinge=elem.hinge[1])
+        # If you used distributed or point loads, subtract the equivalent nodal force (in local system)
+        # Get equivalent local nodal force for this element from loading table
+        f_eqv = np.zeros(6)
+        if len(element_loads) > elem.id:
+            # Uniform load
+            if "uniform" in element_loads[elem.id] and element_loads[elem.id].get("uniform", 0):
+                f_eqv += beam_uniform_load_local(element_loads[elem.id]["uniform"], L)
+            # Point loads
+            if "points" in element_loads[elem.id]:
+                for P, a in element_loads[elem.id]["points"]:
+                    f_eqv += beam_point_load_local(P, a, L)
+        # Final local end force: k_local @ u_local - f_eqv
+        Fe_local = k_local @ Ue_local - f_eqv
+        print(f"Element {elem.id}: {Fe_local}")
+
 
 if __name__ == '__main__':
     main()
