@@ -151,12 +151,6 @@ def apply_boundary_conditions(K, F, nodes, penalty=1e20):
     return K_mod, F_mod
 
 def main():
-    E = 2e11      # Pa
-    A = 0.003     # m^2
-    I = 1.6e-5    # m^4
-    h = 0.4       # m, section height
-    alpha = 1.2e-5  # 1/degC
-
     nodes = [
         Node(0, 0.0, 0.0, constraint=[0, 0, 0]),
         Node(1, 4.0, 0.0, constraint=[None, 0, None]),
@@ -164,8 +158,8 @@ def main():
     ]
 
     elements = [
-        Element(0, 0, 1, E, A, I, delta_T=0.0, alpha=alpha, grad_T=50.0, h=h),
-        Element(1, 1, 2, E, A, I, delta_T=0.0, alpha=alpha, grad_T=0.0, h=h),
+        Element(0, 0, 1, E=2e11, A=0.003, I=1.6e-5, delta_T=0.0, alpha=1.2e-5, grad_T=50.0, h=0.4),
+        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5, delta_T=0.0, alpha=1.2e-5, grad_T=0.0, h=0.4),
     ]
 
     ndof = len(nodes) * 3

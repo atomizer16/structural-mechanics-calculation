@@ -9,3 +9,18 @@ Element(0, 0, 1, E=2e11, A=0.003, I=1.6e-5) µÚÒ»¸ö0ÊÇµ¥Ôª±àºÅ£¬ºóÃæÁ½¸öÊÇ½Úµã±àº
 EÊÇµ¯ĞÔÄ£Á¿£¬AÊÇ½ØÃæÃæ»ı£¬IÊÇ¹ßĞÔ¾Ø
 K_modºÍF_modÊÇÒıÈëËùÓĞ±ß½çÌõ¼şºó¡¢×¼±¸Êµ¼ÊÇó½âµÄ·½³Ì×é
 ×¢ÒâÔÚÖ÷º¯Êı¶¨ÒåÊ±£¬Ò»¶¨ÒªÈÃELEMENTºÍELEMENT_LOADS³¤¶ÈÒ»ÖÂ
+ÔÚCP_SKEWED_SUPPORTÖĞ£¬TANGENT´ú±íÔÚÖ§×ùÇĞÏòÓĞÔ¼Êø£¨Ò²¾ÍÊÇĞ±½ÂÖ§×ù£©£¬NORMAL´ú±íÔÚÖ§×ù·¨ÏòÓĞÔ¼Êø£¨Ò²¾ÍÊÇĞ±»¬ÒÆÖ§×ù£©
+Èç¹ûÓĞ¼¯ÖĞÍä¾Ø£¬¾ÍÖ±½ÓÔÚF¾ØÕóÖĞ¼ÓÉÏ¾ÍĞĞ
+ndof = len(nodes) * 3
+F = np.zeros(ndof)
+F[4*3+2] = 10.0(Èç¹ûÊÇY·½ÏòµÄÁ¦¾ÍÊÇ4*3+1)
+
+½ÂÖ§×ùºÍ½á¹¹ÖĞµÄ½Â£¬constraintÊÇ½ØÈ»Ïà·´µÄ
+nodes = [
+    Node(0, 0.0, 0.0, constraint=[0, 0, 0]),          # bottom-left, fixed
+    Node(1, 0.0, 4.0, constraint=[None, None, None]), # top-left, free
+    Node(4, 3.0, 4.0, constraint=[None, None, 0]),    # mid-span hinge, ¦È fixed
+    Node(2, 6.0, 4.0, constraint=[None, None, None]), # top-right, free
+    Node(3, 6.0, 0.0, constraint=[0, 0, None]),       # bottom-right, pinned
+]
+

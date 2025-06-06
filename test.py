@@ -137,15 +137,15 @@ def apply_boundary_conditions(K, F, nodes):
 
 def main():
     nodes = [
-        Node(0, 0.0, 0.0, constraint=[0, 0, 0]),
-        Node(1, 0.0, 4.0, constraint=[None, None, None]),
-        Node(2, 6.0, 4.0, constraint=[None, None, None]),
-        Node(3, 6.0, 0.0, constraint=[0, 0, None]),
+        Node(0, 0.0, 10.0, constraint=[None, 0, None]),
+        Node(1, 10.0, 0.0, constraint=[0, 0, 0]),
+        Node(2, 10.0, 10.0, constraint=[None, None, None]),
+        Node(3, 20.0, 10.0, constraint=[None, 0, None]),
     ]
     elements = [
-        Element(0, 0, 1, E=1e11, A=0.003, I=1.6e-5, ignore_axial=False),
-        Element(1, 1, 2, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False),
-        Element(2, 2, 3, E=2e11, A=0.003, I=1.6e-5, ignore_axial=False)
+        Element(0, 0, 2, E=1e11, A=0.02, I=2e-3, ignore_axial=False),
+        Element(1, 1, 2, E=1e11, A=0.02, I=2e-3, ignore_axial=False),
+        Element(2, 3, 2, E=1e11, A=0.02, I=2e-3, ignore_axial=False)
     ]
 
     ndof = len(nodes) * 3
@@ -153,8 +153,8 @@ def main():
 
     # === Smart element load table ===
     element_loads = [
-        {"uniform": 2e3},  # Element 0: uniform load
-        {"uniform": 6e3, "points": [(15e3, 0.8), (12e3, 2.1)]},  # Element 1: uniform + two point loads
+        {"uniform": 12e3},  # Element 0: uniform load
+        {},  # Element 1: uniform + two point loads
         {}                 # Element 2: no loads
     ]
 
@@ -162,7 +162,6 @@ def main():
     F = assemble_element_loads(F, nodes, elements, element_loads)
 
     # --- Add additional nodal loads (such as moment at node 2) ---
-    F[2*3+2] += 10.0 # Node 2, moment load
 
     K = assemble_global_stiffness(nodes, elements)
     print("Global stiffness matrix:\n", K)

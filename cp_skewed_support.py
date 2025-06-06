@@ -216,6 +216,5 @@ def main():
         Fe_local = k_local @ Ue_local - f_eqv
         print(f"Element {elem.id}: {Fe_local}")
 
-
 if __name__ == '__main__':
     main()
